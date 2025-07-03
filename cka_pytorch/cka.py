@@ -246,6 +246,11 @@ class CKACalculator:
         show_img: bool = True,
         show_half_heatmap: bool = False,
         invert_y_axis: bool = True,
+        title_font_size: int = 14,
+        axis_font_size: int = 12,
+        tick_font_size: int = 10,
+        figsize: tuple[int, int] = (10, 10),
+        dpi: int = 300,
     ) -> None:
         """Plot the CKA matrix.
 
@@ -286,6 +291,11 @@ class CKACalculator:
             show_img=show_img,
             show_half_heatmap=show_half_heatmap,
             invert_y_axis=invert_y_axis,
+            title_font_size=title_font_size,
+            axis_font_size=axis_font_size,
+            tick_font_size=tick_font_size,
+            figsize=figsize,
+            dpi=dpi,
         )
 
     def reset(self) -> None:
