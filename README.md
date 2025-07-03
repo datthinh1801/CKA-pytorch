@@ -21,8 +21,8 @@ By leveraging GPU superiority, **this implementation runs much faster than any N
 I haven't added a `requirements.txt` since the exact version of each package is not that important :man_shrugging:
 
 #### Required packages to use the class/functions:
-* python3.7+
-* torch (any relatively recent version should be O.K.)
+* python3.11
+* torch
 * torchvision 
 * tqdm
 * torchmetrics
@@ -39,6 +39,3 @@ Try out the example notebook in `example.ipynb`.
 * If you found this repo helpful, please give it a :star:
 * If you find any bugs/improvements, feel free to create a new issue.
 * This code is mostly tested on ResNets
-
-### TODO (when I feel like it)
-* Ditch hooks; change to `torch.fx` implementation
