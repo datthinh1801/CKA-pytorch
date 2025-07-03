@@ -174,19 +174,23 @@ class CKACalculator:
         assert self.num_elements is not None
         assert self.hsic_matrix is not None
 
+        hsic_x = torch.zeros(1, self.num_layers_x, device=self.device)
+        hsic_y = torch.zeros(self.num_layers_y, 1, device=self.device)
+        hsic_matrix = torch.zeros(self.num_elements, device=self.device)
+
         # Self-HSIC for model 1
         for start_idx in range(0, self.num_layers_x, self.group_size):
             end_idx = min(start_idx + self.group_size, self.num_layers_x)
             K = torch.stack(features1[start_idx:end_idx], dim=0)
-            hsic_x = batched_hsic(K, K) * self.epsilon
-            self.self_hsic_x.update(hsic_x)
+            hsic_x[0, start_idx:end_idx] += batched_hsic(K, K) * self.epsilon
+        self.self_hsic_x.update(hsic_x)
 
         # Self-HSIC for model 2
         for start_idx in range(0, self.num_layers_y, self.group_size):
             end_idx = min(start_idx + self.group_size, self.num_layers_y)
             L = torch.stack(features2[start_idx:end_idx], dim=0)
-            hsic_y = batched_hsic(L, L) * self.epsilon
-            self.self_hsic_y.update(hsic_y.view(-1, 1))
+            hsic_y[start_idx:end_idx, 0] += batched_hsic(L, L) * self.epsilon
+        self.self_hsic_y.update(hsic_y)
 
         # Cross-HSIC
         for start_idx in range(0, self.num_elements, self.group_size):
@@ -199,7 +203,8 @@ class CKACalculator:
                 [features2[j // self.num_layers_x] for j in range(start_idx, end_idx)],
                 dim=0,
             )
-            self.hsic_matrix.update(batched_hsic(K, L) * self.epsilon)
+            hsic_matrix[start_idx:end_idx] += batched_hsic(K, L) * self.epsilon
+        self.hsic_matrix.update(hsic_matrix)
 
     def _compute_final_cka(self) -> torch.Tensor:
         """
