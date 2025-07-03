@@ -7,7 +7,7 @@ name = "cka-pytorch"
 authors = [
     { name = "Dat-Thinh Nguyen", email = "datthinh1801@gmail.com" },
 ]
-version = "0.1.0"
+version = "0.1.1"
 description = "A PyTorch implementation of Centered Kernel Alignment (CKA) with GPU support."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -18,6 +18,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "matplotlib",
+    "seaborn",
     "torch",
     "torchmetrics",
     "torchvision",

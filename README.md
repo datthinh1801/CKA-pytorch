@@ -9,12 +9,15 @@ A PyTorch implementation of Centered Kernel Alignment (CKA) with GPU support for
 - **Easy to Use:** Simple and intuitive API for calculating the CKA matrix between two models.
 - **Flexible:** Can be used with any PyTorch models and dataloaders.
 
+## Installation
+```bash
+pip install cka-pytorch
+```
+
 ## Usage
 
 ```python
 import torch
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from torchvision.models import resnet18
 from torch.utils.data import DataLoader
@@ -42,42 +45,8 @@ print("CKA Matrix:")
 print(cka_matrix)
 
 # 4. Plot the CKA Matrix as heatmap
-fig, ax = plt.subplots(figsize=(10,10))
-sns.heatmap(cka_matrix.cpu().numpy(), ax=ax)
+calculator.plot_cka_matrix(title="CKA between ResNet18 and ResNet18")
 ```
-
-## Setup
-
-### Dependencies
-
-The following packages are required to use the library:
-
-- `python>=3.11`
-- `torch`
-- `torchvision`
-- `tqdm`
-- `torchmetrics`
-
-You can install them using pip:
-```bash
-pip install torch torchvision tqdm torchmetrics
-```
-
-### Example Notebook Dependencies
-
-To run the example notebook (`example.ipynb`), you will also need:
-
-- `jupyter`
-- `matplotlib`
-- `numpy`
-
-```bash
-pip install jupyter matplotlib numpy
-```
-
-## Example
-
-For a practical demonstration, please see the `example.ipynb` notebook.
 
 ## Contributing
 

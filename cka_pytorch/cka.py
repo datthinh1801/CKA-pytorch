@@ -9,6 +9,7 @@ from tqdm.autonotebook import tqdm
 from cka_pytorch.hook_manager import _HOOK_LAYER_TYPES, HookManager
 from cka_pytorch.hsic import batched_hsic
 from cka_pytorch.metrics import AccumTensor
+from cka_pytorch.plot import plot_cka
 
 if TYPE_CHECKING:
     from torch.utils.data import DataLoader
@@ -34,6 +35,8 @@ class CKACalculator:
         model1: nn.Module,
         model2: nn.Module,
         dataloader: DataLoader,
+        model1_name: str = "Model 1",
+        model2_name: str = "Model 2",
         hook_fn: Optional[Union[str, Callable]] = None,
         hook_layer_types: Tuple[Type[nn.Module], ...] = _HOOK_LAYER_TYPES,
         num_epochs: int = 10,
@@ -60,6 +63,8 @@ class CKACalculator:
         """
         self.model1 = model1
         self.model2 = model2
+        self.model1_name = model1_name
+        self.model2_name = model2_name
         self.dataloader = dataloader
         self.num_epochs = num_epochs
         self.group_size = group_size
@@ -226,6 +231,62 @@ class CKACalculator:
             self.num_layers_y, self.num_layers_x
         ) / torch.sqrt(hsic_x * hsic_y)
         return self.cka_matrix
+
+    def plot_cka_matrix(
+        self,
+        save_path: str | None = None,
+        title: str | None = None,
+        vmin: float = 0.0,
+        vmax: float = 1.0,
+        cmap: str = "magma",
+        show_ticks_labels: bool = True,
+        short_tick_labels_splits: int | None = None,
+        use_tight_layout: bool = True,
+        show_annotations: bool = True,
+        show_img: bool = True,
+        show_half_heatmap: bool = False,
+        invert_y_axis: bool = True,
+    ) -> None:
+        """Plot the CKA matrix.
+
+        Args:
+            save_path (str | None): Where to save the plot. If None, the plot will not be saved.
+            title (str | None): The plot title. If None, a default title will be used.
+            vmin (float): Minimum value for the colormap.
+            vmax (float): Maximum value for the colormap.
+            cmap (str): The name of the colormap to use.
+            show_ticks_labels (bool): Whether to show the tick labels.
+            short_tick_labels_splits (int | None): If not None, shorten tick labels.
+            use_tight_layout (bool): Whether to use a tight layout.
+            show_annotations (bool): Whether to show annotations on the heatmap.
+            show_img (bool): Whether to show the plot.
+            show_half_heatmap (bool): Whether to show only half of the heatmap.
+            invert_y_axis (bool): Whether to invert the y-axis.
+        """
+        if self.cka_matrix is None:
+            raise ValueError(
+                "CKA matrix has not been calculated yet. Call `calculate_cka_matrix` first."
+            )
+
+        plot_cka(
+            cka_matrix=self.cka_matrix,
+            model1_layers=self.module_names_x,  # type: ignore
+            model2_layers=self.module_names_y,  # type: ignore
+            model1_name=self.model1_name,
+            model2_name=self.model2_name,
+            save_path=save_path,
+            title=title,
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            show_ticks_labels=show_ticks_labels,
+            short_tick_labels_splits=short_tick_labels_splits,
+            use_tight_layout=use_tight_layout,
+            show_annotations=show_annotations,
+            show_img=show_img,
+            show_half_heatmap=show_half_heatmap,
+            invert_y_axis=invert_y_axis,
+        )
 
     def reset(self) -> None:
         """
