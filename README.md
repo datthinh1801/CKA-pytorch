@@ -2,6 +2,9 @@
 
 A PyTorch implementation of Centered Kernel Alignment (CKA) with GPU support for fast and efficient computation.
 
+> [!WARNING]
+> This project is for educational and academic purposes (and for fun 🤷🏻).
+
 ## Features
 
 - **GPU Accelerated:** Leverages the power of GPUs for significantly faster CKA calculations compared to NumPy-based implementations.
@@ -55,4 +58,6 @@ calculator.plot_cka_matrix(title="CKA between ResNet18 and ResNet18")
 - This implementation has been primarily tested with ResNet architectures.
 
 ## Acknowledgement
-This project is based on [CKA.pytorch](https://github.com/numpee/CKA.pytorch) for the useful batched implementation of $HSIC_1$.
+This project is based on:
+- [CKA.pytorch](https://github.com/numpee/CKA.pytorch)
+- [centered-kernel-alignment](https://github.com/RistoAle97/centered-kernel-alignment)
