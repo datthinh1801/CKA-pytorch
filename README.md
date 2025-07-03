@@ -53,3 +53,6 @@ calculator.plot_cka_matrix(title="CKA between ResNet18 and ResNet18")
 - If you find this repository helpful, please give it a :star:.
 - If you encounter any bugs or have suggestions for improvements, feel free to open an issue.
 - This implementation has been primarily tested with ResNet architectures.
+
+## Acknowledgement
+This project is based on [CKA.pytorch](https://github.com/numpee/CKA.pytorch) for the useful batched implementation of $HSIC_1$.
