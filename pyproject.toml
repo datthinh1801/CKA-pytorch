@@ -7,7 +7,7 @@ name = "cka-pytorch"
 authors = [
     { name = "Dat-Thinh Nguyen", email = "datthinh1801@gmail.com" },
 ]
-version = "0.1.4"
+version = "0.1.5"
 description = "A PyTorch implementation of Centered Kernel Alignment (CKA) with GPU support."
 readme = "README.md"
 requires-python = ">=3.11"

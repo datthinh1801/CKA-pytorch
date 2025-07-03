@@ -21,6 +21,11 @@ def plot_cka(
     show_img: bool = True,
     show_half_heatmap: bool = False,
     invert_y_axis: bool = True,
+    title_font_size: int = 14,
+    axis_font_size: int = 12,
+    tick_font_size: int = 10,
+    figsize: tuple[int, int] = (10, 10),
+    dpi: int = 300,
 ) -> None:
     """Plot the CKA matrix.
 
@@ -42,6 +47,11 @@ def plot_cka(
         show_img (bool): Whether to show the plot.
         show_half_heatmap (bool): Whether to show only half of the heatmap.
         invert_y_axis (bool): Whether to invert the y-axis.
+        title_font_size (int): Font size for the title.
+        axis_font_size (int): Font size for the axis labels.
+        tick_font_size (int): Font size for the tick labels.
+        figsize (tuple[int, int]): Size of the figure.
+        dpi (int): Dots per inch for the saved figure.
     """
     # Build the mask
     mask = (
@@ -51,6 +61,7 @@ def plot_cka(
     )
 
     # Build the heatmap
+    fig, ax = plt.subplots(figsize=figsize)
     ax = sn.heatmap(
         cka_matrix.cpu().numpy(),
         vmin=vmin,
@@ -58,32 +69,41 @@ def plot_cka(
         annot=show_annotations,
         cmap=cmap,
         mask=mask.cpu().numpy() if mask is not None else None,
+        ax=ax,
     )
     if invert_y_axis:
         ax.invert_yaxis()
 
-    ax.set_xlabel(f"{model2_name} Layers", fontsize=12)
-    ax.set_ylabel(f"{model1_name} Layers", fontsize=12)
+    ax.set_xlabel(f"{model2_name} Layers", fontsize=axis_font_size)
+    ax.set_ylabel(f"{model1_name} Layers", fontsize=axis_font_size)
 
     # Deal with tick labels
+    ax.set_xticks(range(len(model2_layers)))
+    ax.set_yticks(range(len(model1_layers)))
     if show_ticks_labels:
         if short_tick_labels_splits is None:
-            ax.set_xticklabels(model2_layers)
-            ax.set_yticklabels(model1_layers)
+            ax.set_xticklabels(
+                model2_layers,
+                fontsize=tick_font_size,
+            )
+            ax.set_yticklabels(
+                model1_layers,
+                fontsize=tick_font_size,
+            )
         else:
-            ax.set_xticks(range(len(model2_layers)))
             ax.set_xticklabels(
                 [
                     "-".join(module.split(".")[-short_tick_labels_splits:])
                     for module in model2_layers
-                ]
+                ],
+                fontsize=tick_font_size,
             )
-            ax.set_yticks(range(len(model1_layers)))
             ax.set_yticklabels(
                 [
                     "-".join(module.split(".")[-short_tick_labels_splits:])
                     for module in model1_layers
-                ]
+                ],
+                fontsize=tick_font_size,
             )
 
         plt.xticks(rotation=90)
@@ -94,10 +114,10 @@ def plot_cka(
 
     # Put the title if passed
     if title is not None:
-        ax.set_title(title, fontsize=14)
+        ax.set_title(title, fontsize=title_font_size)
     else:
         title = f"{model1_name} vs {model2_name}"
-        ax.set_title(title, fontsize=14)
+        ax.set_title(title, fontsize=title_font_size)
 
     # Set the layout to tight if the corresponding parameter is True
     if use_tight_layout:
@@ -107,7 +127,7 @@ def plot_cka(
     if save_path is not None:
         title = title.replace("/", "-")
         path_rel = f"{save_path}/{title}.png"
-        plt.savefig(path_rel, dpi=400, bbox_inches="tight")
+        plt.savefig(path_rel, dpi=dpi, bbox_inches="tight")
 
     # Show the image if the user chooses to do so
     if show_img:
