@@ -71,12 +71,14 @@ def plot_cka(
             ax.set_xticklabels(model2_layers)
             ax.set_yticklabels(model1_layers)
         else:
+            ax.set_xticks(range(len(model2_layers)))
             ax.set_xticklabels(
                 [
                     "-".join(module.split(".")[-short_tick_labels_splits:])
                     for module in model2_layers
                 ]
             )
+            ax.set_yticks(range(len(model1_layers)))
             ax.set_yticklabels(
                 [
                     "-".join(module.split(".")[-short_tick_labels_splits:])
