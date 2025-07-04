@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Literal, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import torch
 import torch.nn as nn
@@ -32,8 +32,9 @@ class CKACalculator:
         model2_layers: List[str] | None = None,
         model1_name: str = "Model 1",
         model2_name: str = "Model 2",
-        kernel: Literal["linear", "rbf"] = "linear",
+        batched_feature_size: int = 64,
         device: Optional[torch.device] = None,
+        verbose: bool = True,
     ) -> None:
         """
         Initializes the CKACalculator with two models and their respective layers for CKA computation.
@@ -50,17 +51,21 @@ class CKACalculator:
                          Defaults to "Model 1".
             model2_name: An optional string representing the name of `model2`, used for plotting.
                          Defaults to "Model 2".
-            kernel: The type of kernel to use for computing Gram matrices.
-                    Can be "linear" or "rbf" (Radial Basis Function). Defaults to "linear".
+            batched_feature_size: An integer specifying the number of layers to process in a single batch
+                                 when calculating HSIC. This is useful for memory efficiency, especially
+                                 when dealing with large models or many layers. Defaults to 64.
             device: An optional `torch.device` to perform computations on (e.g., `torch.device("cuda")`
                     or `torch.device("cpu")`). If `None`, the device of `model1`'s parameters will be used.
+            verbose: A boolean indicating whether to print progress bars during CKA calculation.
+                     Defaults to `True`.
         """
         self.model1 = model1
         self.model2 = model2
         self.model1_name = model1_name
         self.model2_name = model2_name
-        self.kernel = kernel
+        self.batched_feature_size = batched_feature_size
         self.device = device or next(model1.parameters()).device
+        self.verbose = verbose
 
         self.model1.eval()
         self.model2.eval()
@@ -72,6 +77,7 @@ class CKACalculator:
 
         self.num_layers_x = len(self.hook_manager1.module_names)
         self.num_layers_y = len(self.hook_manager2.module_names)
+        self.num_elements = self.num_layers_x * self.num_layers_y
 
         self.hsic_matrix = AccumTensor(
             torch.zeros(self.num_layers_y, self.num_layers_x, device=self.device)
@@ -116,7 +122,9 @@ class CKACalculator:
         """
         for epoch in range(num_epochs):
             loader = tqdm(
-                dataloader, desc=f"Calculate CKA matrix (Epoch {epoch+1}/{num_epochs})"
+                dataloader,
+                desc=f"Calculate CKA matrix (Epoch {epoch+1}/{num_epochs})",
+                disable=not self.verbose,
             )
             for x, _ in loader:
                 self._process_batch(x.to(self.device))
@@ -173,44 +181,36 @@ class CKACalculator:
             features2: A list of `torch.Tensor`s, where each tensor represents the activations
                        from a layer of `model2` for the current batch.
         """
-        kernels1 = torch.stack([self._compute_kernel(f) for f in features1])
-        kernels2 = torch.stack([self._compute_kernel(f) for f in features2])
+        hsic_x = torch.zeros(1, self.num_layers_x, device=self.device)
+        hsic_y = torch.zeros(self.num_layers_y, 1, device=self.device)
+        hsic_matrix = torch.zeros(self.num_elements, device=self.device)
 
         # Self-HSIC
-        self_hsic_x = hsic1(kernels1, kernels1)
-        self_hsic_y = hsic1(kernels2, kernels2)
+        for start_idx in range(0, self.num_layers_x, self.batched_feature_size):
+            end_idx = min(start_idx + self.batched_feature_size, self.num_layers_x)
+            gram_x = torch.stack(features1[start_idx:end_idx], dim=0)
+            hsic_x[0, start_idx:end_idx] += hsic1(gram_x, gram_x)
+        self.self_hsic_x.update(hsic_x)
+
+        for start_idx in range(0, self.num_layers_y, self.batched_feature_size):
+            end_idx = min(start_idx + self.batched_feature_size, self.num_layers_y)
+            gram_y = torch.stack(features2[start_idx:end_idx], dim=0)
+            hsic_y[start_idx:end_idx, 0] += hsic1(gram_y, gram_y)
+        self.self_hsic_y.update(hsic_y)
 
         # Cross-HSIC
-        hsic_xy = torch.zeros(self.num_layers_y, self.num_layers_x, device=self.device)
-        for i, k1 in enumerate(kernels1):
-            # Expand k1 to match the batch size of kernels2
-            k1_expanded = k1.unsqueeze(0).expand(self.num_layers_y, -1, -1)
-            hsic_xy[:, i] = hsic1(k1_expanded, kernels2)
-
-        self.self_hsic_x.update(self_hsic_x)
-        self.self_hsic_y.update(self_hsic_y)
-        self.hsic_matrix.update(hsic_xy)
-
-    def _compute_kernel(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the kernel matrix for the given feature tensor `x`.
-
-        The choice of kernel (linear or RBF) is determined by the `self.kernel` attribute,
-        which is set during the `CKACalculator` initialization.
-        Before computing the kernel, the input tensor `x` is flattened to a 2D tensor
-        where each row represents a sample and each column represents a feature.
-
-        Args:
-            x: A `torch.Tensor` representing the activations from a layer.
-               Its shape can be `(batch_size, *)`, where `*` denotes any number of
-               additional dimensions (e.g., `(batch_size, channels, height, width)`).
-
-        Returns:
-            A `torch.Tensor` representing the Gram (kernel) matrix of shape `(batch_size, batch_size)`.
-
-        Raises:
-            ValueError: If an unknown kernel type is specified in `self.kernel`.
-        """
+        for start_idx in range(0, self.num_elements, self.batched_feature_size):
+            end_idx = min(start_idx + self.batched_feature_size, self.num_elements)
+            gram_x = torch.stack(
+                [features1[i % self.num_layers_x] for i in range(start_idx, end_idx)],
+                dim=0,
+            )
+            gram_y = torch.stack(
+                [features2[i // self.num_layers_x] for i in range(start_idx, end_idx)],
+                dim=0,
+            )
+            hsic_matrix[start_idx:end_idx] += hsic1(gram_x, gram_y)
+        self.hsic_matrix.update(hsic_matrix)
 
     def _compute_final_cka(self, epsilon: float) -> torch.Tensor:
         """
@@ -230,6 +230,14 @@ class CKACalculator:
         Returns:
             A `torch.Tensor` representing the final CKA matrix.
         """
+        hsic_matrix = self.hsic_matrix.compute()
+        self_hsic_x = self.self_hsic_x.compute()
+        self_hsic_y = self.self_hsic_y.compute()
+
+        cka_matrix = hsic_matrix.reshape(
+            self.num_layers_y, self.num_layers_x
+        ) / torch.sqrt(self_hsic_x * self_hsic_y + epsilon)
+        return cka_matrix
 
     def plot_cka_matrix(
         self,
@@ -261,3 +269,17 @@ class CKACalculator:
             save_path=save_path,
             title=title,
         )
+
+    def reset(self) -> None:
+        """
+        Resets the accumulators for a new CKA calculation.
+
+        This method clears the accumulated HSIC values and resets the hook managers
+        to prepare for a new CKA calculation.
+        """
+        self.hsic_matrix.reset()
+        self.self_hsic_x.reset()
+        self.self_hsic_y.reset()
+
+        self.hook_manager1.clear_all()
+        self.hook_manager2.clear_all()

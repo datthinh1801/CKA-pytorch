@@ -174,4 +174,3 @@ fabric.properties
 experiments/
 wandb/
 **/.DS_Store
-centered-kernel-alignment/

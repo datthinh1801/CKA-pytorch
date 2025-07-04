@@ -58,6 +58,11 @@ class HookManager:
             out: The output tensor(s) from the module's forward pass. This is the activation
                  that will be stored.
         """
+        del (
+            module,
+            inp,
+        )  # Unused parameters, but kept for compatibility with the hook signature
+        self.features[module_name] = out.detach()
 
     def _insert_hooks(self, layers: List[str]) -> List[str]:
         """
@@ -112,6 +117,14 @@ class HookManager:
         """
         self.features = {}
 
+    def clear_hooks(self) -> None:
+        """
+        Removes all registered forward hooks from the model.
+        """
+        for handle in self.handles:
+            handle.remove()
+        self.handles = []
+
     def clear_all(self) -> None:
         """
         Clears all collected features and removes all registered hooks.
@@ -123,11 +136,3 @@ class HookManager:
         """
         self.clear_hooks()
         self.clear_features()
-
-    def clear_hooks(self) -> None:
-        """
-        Removes all registered forward hooks from the model.
-        """
-        for handle in self.handles:
-            handle.remove()
-        self.handles = []
