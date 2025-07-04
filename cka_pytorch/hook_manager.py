@@ -6,6 +6,8 @@ from typing import Dict, List
 import torch
 import torch.nn as nn
 
+from .utils import gram
+
 
 class HookManager:
     """
@@ -17,7 +19,12 @@ class HookManager:
     to clear collected features and remove hooks.
     """
 
-    def __init__(self, model: nn.Module, layers: List[str]) -> None:
+    def __init__(
+        self,
+        model: nn.Module,
+        layers: List[str] | None = None,
+        recursive: bool = True,
+    ) -> None:
         """
         Initializes the HookManager and registers forward hooks on the specified layers.
 
@@ -26,6 +33,9 @@ class HookManager:
             layers: A list of strings, where each string is the fully qualified name of a
                     module (layer) within the `model` from which to extract features.
                     These names typically come from `model.named_modules()`.
+                    If `None`, all layers will be hooked. Defaults to `None`.
+            recursive: A boolean indicating whether to register hooks recursively on the model.
+                      If `True`, hooks will be registered on all submodules of the specified layers.
 
         Raises:
             ValueError: If no valid layers are found in the model based on the provided `layers` list.
@@ -34,8 +44,38 @@ class HookManager:
         self.features: Dict[str, torch.Tensor] = {}
         self.handles: List[torch.utils.hooks.RemovableHandle] = []
 
-        # Use list(dict.fromkeys(layers)) to preserve order while removing duplicate layer names
-        self.module_names = self._insert_hooks(list(dict.fromkeys(layers)))
+        if layers is None:
+            layers = self._extract_all_layers(model, recursive)
+
+        self.module_names = self._insert_hooks(
+            module=model,
+            layers=layers,
+            recursive=recursive,
+        )
+
+    def _extract_all_layers(
+        self, module: nn.Module, recursive: bool = True
+    ) -> List[str]:
+        """
+        Extracts all layer names from the model recursively.
+
+        This method traverses the model and collects the names of all modules
+        (layers) in a flat list. It is useful for debugging or when you want to
+        register hooks on all layers without specifying them explicitly.
+
+        Args:
+            module: The PyTorch model (`torch.nn.Module`) to extract layer names from.
+
+        Returns:
+            A list of strings, where each string is the name of a module in the model.
+        """
+        layers = set()
+        for name, child in module.named_children():
+            if recursive and len(list(child.named_children())) > 0:
+                layers.update(self._extract_all_layers(child))
+            else:
+                layers.add(name)
+        return list(layers)
 
     def _hook(
         self,
@@ -62,9 +102,18 @@ class HookManager:
             module,
             inp,
         )  # Unused parameters, but kept for compatibility with the hook signature
-        self.features[module_name] = out.detach()
+        batch_size = out.size(0)
+        feature = out.reshape(batch_size, -1)
+        feature = gram(feature)
+        self.features[module_name] = feature
 
-    def _insert_hooks(self, layers: List[str]) -> List[str]:
+    def _insert_hooks(
+        self,
+        module: nn.Module,
+        layers: List[str],
+        recursive: bool = True,
+        prev_name: str = "",
+    ) -> List[str]:
         """
         Registers forward hooks on the specified layers of the model.
 
@@ -87,24 +136,26 @@ class HookManager:
                         This typically indicates an issue with the provided layer names.
         """
         filtered_layers: List[str] = []
-        for module_name, module in self.model.named_modules():
+        for module_name, child in module.named_children():
+            curr_name = f"{prev_name}.{module_name}" if prev_name else module_name
+            curr_name = curr_name.replace("_model.", "")
+            num_grandchildren = len(list(child.named_children()))
+
+            if recursive and num_grandchildren > 0:
+                # If the module has children, recursively register hooks for them
+                filtered_layers.extend(
+                    self._insert_hooks(
+                        module=child,
+                        layers=layers,
+                        recursive=recursive,
+                        prev_name=curr_name,
+                    )
+                )
+
             if module_name in layers:
-                handle = module.register_forward_hook(partial(self._hook, module_name))  # type: ignore
+                handle = child.register_forward_hook(partial(self._hook, curr_name))  # type: ignore
                 self.handles.append(handle)
-                filtered_layers.append(module_name)
-
-        if len(filtered_layers) != len(layers):
-            hooked_set = set(filtered_layers)
-            not_hooked = [layer for layer in layers if layer not in hooked_set]
-            print(
-                f"Warning: Could not find layers: {not_hooked}. They will be ignored."
-            )
-
-        if not filtered_layers:
-            raise ValueError(
-                "No layers were found in the model. Please use `model.named_modules()` "
-                "to check the available layer names."
-            )
+                filtered_layers.append(curr_name)
 
         return filtered_layers
 

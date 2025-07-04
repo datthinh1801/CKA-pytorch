@@ -28,12 +28,13 @@ class CKACalculator:
         self,
         model1: nn.Module,
         model2: nn.Module,
-        model1_layers: List[str],
+        model1_layers: List[str] | None = None,
         model2_layers: List[str] | None = None,
         model1_name: str = "Model 1",
         model2_name: str = "Model 2",
         batched_feature_size: int = 64,
         device: Optional[torch.device] = None,
+        hook_recursive: bool = True,
         verbose: bool = True,
     ) -> None:
         """
@@ -56,6 +57,9 @@ class CKACalculator:
                                  when dealing with large models or many layers. Defaults to 64.
             device: An optional `torch.device` to perform computations on (e.g., `torch.device("cuda")`
                     or `torch.device("cpu")`). If `None`, the device of `model1`'s parameters will be used.
+            hook_recursive: A boolean indicating whether to register hooks recursively on the model.
+                           If `True`, hooks will be registered on all submodules of the specified layers.
+                           Defaults to `True`.
             verbose: A boolean indicating whether to print progress bars during CKA calculation.
                      Defaults to `True`.
         """
@@ -70,9 +74,15 @@ class CKACalculator:
         self.model1.eval()
         self.model2.eval()
 
-        self.hook_manager1 = HookManager(model1, model1_layers)
+        self.hook_manager1 = HookManager(
+            model1,
+            model1_layers,
+            recursive=hook_recursive,
+        )
         self.hook_manager2 = HookManager(
-            model2, model2_layers if model2_layers else model1_layers
+            model2,
+            model2_layers if model2_layers else model1_layers,
+            recursive=hook_recursive,
         )
 
         self.num_layers_x = len(self.hook_manager1.module_names)
