@@ -1,43 +1,56 @@
 import torch
 
 
-def batched_hsic(K: torch.Tensor, L: torch.Tensor) -> torch.Tensor:
+def hsic1(gram_x: torch.Tensor, gram_y: torch.Tensor) -> torch.Tensor:
     """
-    Computes the Hilbert-Schmidt Independence Criterion (HSIC) in a batched manner.
+    Computes the batched version of the Hilbert-Schmidt Independence Criterion (HSIC) on Gram matrices.
 
-    HSIC is a measure of statistical independence between two random variables.
-    This function calculates the HSIC between two kernel matrices, K and L, for a batch of data.
+    This function is designed to work with mini-batches of data, where `gram_x` and `gram_y`
+    are collections of Gram matrices, one for each sample in the batch.
+    It calculates an unbiased estimator of HSIC for each pair of Gram matrices in the batch.
 
     Args:
-        K: A batch of kernel matrices of shape (B, N, N), where B is the batch size
-           and N is the number of samples.
-        L: A batch of kernel matrices of the same shape as K.
+        gram_x: A `torch.Tensor` representing a batch of Gram matrices for the first set of features (X).
+                Expected shape: `(batch_size, n, n)`, where `batch_size` is the number of samples
+                in the mini-batch, and `n` is the number of data points (e.g., features or neurons).
+        gram_y: A `torch.Tensor` representing a batch of Gram matrices for the second set of features (Y).
+                Expected shape: `(batch_size, n, n)`, same dimensions as `gram_x`.
 
     Returns:
-        A tensor of shape (B,) containing the HSIC value for each item in the batch.
+        A `torch.Tensor` of shape `(batch_size,)` containing the unbiased HSIC value for each
+        pair of Gram matrices in the batch.
+
+    Raises:
+        ValueError: If `gram_x` and `gram_y` do not have exactly three dimensions or if their
+                    shapes do not match.
     """
-    assert K.size() == L.size(), "Kernel matrices must have the same dimensions."
-    assert K.dim() == 3, "Input tensors must be 3-dimensional (B, N, N)."
+    if len(gram_x.size()) != 3 or gram_x.size() != gram_y.size():
+        raise ValueError("Invalid size for one of the two input tensors.")
 
-    K = K.clone()
-    L = L.clone()
-    n = K.size(1)
+    n = gram_x.shape[-1]
+    gram_x = gram_x.clone()
+    gram_y = gram_y.clone()
 
-    # Zero out the diagonals
-    K.diagonal(dim1=-1, dim2=-2).fill_(0)
-    L.diagonal(dim1=-1, dim2=-2).fill_(0)
+    # Fill the diagonal of each matrix with 0
+    gram_x.diagonal(dim1=-1, dim2=-2).fill_(0)
+    gram_y.diagonal(dim1=-1, dim2=-2).fill_(0)
 
-    # HSIC calculation
-    KL = torch.bmm(K, L)
-    trace_KL = KL.diagonal(dim1=-1, dim2=-2).sum(-1).unsqueeze(-1).unsqueeze(-1)
+    # Compute the product between gram_x and gram_y
+    kl = torch.bmm(gram_x, gram_y)
 
-    sum_K = K.sum((-1, -2), keepdim=True)
-    sum_L = L.sum((-1, -2), keepdim=True)
-    middle_term = sum_K * sum_L / ((n - 1) * (n - 2))
+    # Compute the trace (sum of the elements on the diagonal) of the previous product, i.e.: the left term
+    trace_kl = kl.diagonal(dim1=-1, dim2=-2).sum(-1).unsqueeze(-1).unsqueeze(-1)
 
-    sum_KL = KL.sum((-1, -2), keepdim=True)
-    right_term = 2 * sum_KL / (n - 2)
+    # Compute the middle term
+    sum_gram_x = gram_x.sum((-1, -2), keepdim=True)
+    sum_gram_y = gram_y.sum((-1, -2), keepdim=True)
+    middle_term = sum_gram_x * sum_gram_y / ((n - 1) * (n - 2))
 
-    hsic = (trace_KL + middle_term - right_term) / (n * (n - 3))
+    # Compute the right term
+    sum_kl = kl.sum((-1, -2), keepdim=True)
+    right_term = 2 * sum_kl / (n - 2)
+
+    # Put all together to compute the main term
+    hsic = (trace_kl + middle_term - right_term) / (n**2 - 3 * n)
 
     return hsic.squeeze(-1).squeeze(-1)
