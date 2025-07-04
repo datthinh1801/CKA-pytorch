@@ -39,13 +39,18 @@ dummy_dataset = torch.utils.data.TensorDataset(dummy_data, dummy_labels)
 dataloader = DataLoader(dummy_dataset, batch_size=32)
 
 # 2. Initialize the CKACalculator
-calculator = CKACalculator(model1, model2, dataloader)
+# By default, we will calculate CKA across all layers of the two models
+calculator = CKACalculator(
+    model1=model1,
+    model2=model2,
+    model1_name="ResNet18",
+    model2_name="ResNet18",
+    batched_feature_size=256,
+    verbose=True,
+)
 
 # 3. Calculate the CKA matrix
-cka_matrix = calculator.calculate_cka_matrix()
-
-print("CKA Matrix:")
-print(cka_matrix)
+cka_matrix = calculator.calculate_cka_matrix(dataloader)
 
 # 4. Plot the CKA Matrix as heatmap
 calculator.plot_cka_matrix(title="CKA between ResNet18 and ResNet18")

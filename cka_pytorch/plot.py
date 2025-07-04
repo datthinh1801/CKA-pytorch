@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 import seaborn as sn
 import torch
 
@@ -108,8 +109,8 @@ def plot_cka(
     ax.set_ylabel(f"{model1_name} Layers", fontsize=axis_font_size)
 
     # Deal with tick labels
-    ax.set_xticks(range(len(model2_layers)))
-    ax.set_yticks(range(len(model1_layers)))
+    ax.set_xticks(np.arange(len(model2_layers)) + 0.5)
+    ax.set_yticks(np.arange(len(model1_layers)) + 0.5)
     if show_ticks_labels:
         if short_tick_labels_splits is None:
             ax.set_xticklabels(
