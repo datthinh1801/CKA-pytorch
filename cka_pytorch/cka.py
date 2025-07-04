@@ -244,21 +244,37 @@ class CKACalculator:
         cka_matrix: torch.Tensor,
         save_path: str | None = None,
         title: str | None = None,
+        vmin: float = 0.0,
+        vmax: float = 1.0,
+        cmap: str = "magma",
+        show_ticks_labels: bool = True,
+        short_tick_labels_splits: int | None = None,
+        use_tight_layout: bool = True,
+        show_annotations: bool = True,
+        show_img: bool = True,
+        show_half_heatmap: bool = False,
+        invert_y_axis: bool = True,
+        title_font_size: int = 14,
+        axis_font_size: int = 12,
+        tick_font_size: int = 10,
+        figsize: tuple[int, int] = (10, 10),
+        dpi: int = 300,
     ) -> None:
-        """
-        Plots the calculated CKA matrix as a heatmap.
-
-        This method utilizes the `plot_cka` function from `cka_pytorch.plot` to visualize
-        the CKA matrix. It automatically passes the model names and layer names
-        (obtained from the `HookManager`s) to the plotting function for clear labeling.
+        """Plot the CKA matrix.
 
         Args:
-            cka_matrix: The `torch.Tensor` representing the CKA matrix to be plotted.
-                        This is typically the output of the `calculate_cka_matrix` method.
-            save_path: An optional string specifying the directory path where the plot
-                       should be saved. If `None`, the plot will be displayed but not saved.
-            title: An optional string to be used as the title of the plot. If `None`,
-                   a default title will be generated based on the model names.
+            save_path (str | None): Where to save the plot. If None, the plot will not be saved.
+            title (str | None): The plot title. If None, a default title will be used.
+            vmin (float): Minimum value for the colormap.
+            vmax (float): Maximum value for the colormap.
+            cmap (str): The name of the colormap to use.
+            show_ticks_labels (bool): Whether to show the tick labels.
+            short_tick_labels_splits (int | None): If not None, shorten tick labels.
+            use_tight_layout (bool): Whether to use a tight layout.
+            show_annotations (bool): Whether to show annotations on the heatmap.
+            show_img (bool): Whether to show the plot.
+            show_half_heatmap (bool): Whether to show only half of the heatmap.
+            invert_y_axis (bool): Whether to invert the y-axis.
         """
         plot_cka(
             cka_matrix=cka_matrix,
@@ -268,6 +284,21 @@ class CKACalculator:
             model2_name=self.model2_name,
             save_path=save_path,
             title=title,
+            vmin=vmin,
+            vmax=vmax,
+            cmap=cmap,
+            show_ticks_labels=show_ticks_labels,
+            short_tick_labels_splits=short_tick_labels_splits,
+            use_tight_layout=use_tight_layout,
+            show_annotations=show_annotations,
+            show_img=show_img,
+            show_half_heatmap=show_half_heatmap,
+            invert_y_axis=invert_y_axis,
+            title_font_size=title_font_size,
+            axis_font_size=axis_font_size,
+            tick_font_size=tick_font_size,
+            figsize=figsize,
+            dpi=dpi,
         )
 
     def reset(self) -> None:
