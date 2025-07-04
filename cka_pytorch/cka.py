@@ -80,13 +80,13 @@ class CKACalculator:
         self.num_elements = self.num_layers_x * self.num_layers_y
 
         self.hsic_matrix = AccumTensor(
-            torch.zeros(self.num_layers_y, self.num_layers_x, device=self.device)
+            torch.zeros(self.num_elements, device=self.device)
         )
         self.self_hsic_x = AccumTensor(
-            torch.zeros(self.num_layers_x, device=self.device)
+            torch.zeros(1, self.num_layers_x, device=self.device)
         )
         self.self_hsic_y = AccumTensor(
-            torch.zeros(self.num_layers_y, device=self.device)
+            torch.zeros(self.num_layers_y, 1, device=self.device)
         )
 
     @torch.no_grad()
