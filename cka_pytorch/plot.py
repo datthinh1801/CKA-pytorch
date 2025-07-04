@@ -27,31 +27,61 @@ def plot_cka(
     figsize: tuple[int, int] = (10, 10),
     dpi: int = 300,
 ) -> None:
-    """Plot the CKA matrix.
+    """
+    Plots a Centered Kernel Alignment (CKA) matrix as a heatmap.
+
+    This function visualizes the CKA similarity between layers of two models.
+    The heatmap displays the CKA values, providing insights into the functional
+    similarity of different layers across models.
 
     Args:
-        cka_matrix (torch.Tensor): The CKA matrix.
-        model1_layers (list[str]): List of the names of the first model's layers.
-        model2_layers (list[str]): List of the names of the second model's layers.
-        model1_name (str): Name of the first model.
-        model2_name (str): Name of the second model.
-        save_path (str | None): Where to save the plot. If None, the plot will not be saved.
-        title (str | None): The plot title. If None, a default title will be used.
-        vmin (float): Minimum value for the colormap.
-        vmax (float): Maximum value for the colormap.
-        cmap (str): The name of the colormap to use.
-        show_ticks_labels (bool): Whether to show the tick labels.
-        short_tick_labels_splits (int | None): If not None, shorten tick labels.
-        use_tight_layout (bool): Whether to use a tight layout.
-        show_annotations (bool): Whether to show annotations on the heatmap.
-        show_img (bool): Whether to show the plot.
-        show_half_heatmap (bool): Whether to show only half of the heatmap.
-        invert_y_axis (bool): Whether to invert the y-axis.
-        title_font_size (int): Font size for the title.
-        axis_font_size (int): Font size for the axis labels.
-        tick_font_size (int): Font size for the tick labels.
-        figsize (tuple[int, int]): Size of the figure.
-        dpi (int): Dots per inch for the saved figure.
+        cka_matrix: A `torch.Tensor` representing the CKA matrix. Expected shape is (N, M),
+                    where N is the number of layers in model1 and M is the number of layers in model2.
+                    Values typically range from 0 (no similarity) to 1 (high similarity).
+        model1_layers: A list of strings, where each string is the name of a layer from the first model.
+                       These names will be used as labels for the y-axis of the heatmap.
+        model2_layers: A list of strings, where each string is the name of a layer from the second model.
+                       These names will be used as labels for the x-axis of the heatmap.
+        model1_name: An optional string representing the name of the first model. Used in the plot title and y-axis label.
+                     Defaults to "Model 1".
+        model2_name: An optional string representing the name of the second model. Used in the plot title and x-axis label.
+                     Defaults to "Model 2".
+        save_path: An optional string specifying the directory path where the plot should be saved.
+                   If `None`, the plot will be displayed but not saved. The filename will be generated
+                   based on the title.
+        title: An optional string to be used as the main title of the plot. If `None`,
+               a default title like "Model 1 vs Model 2" will be generated.
+        vmin: The minimum value for the colormap range. Values below `vmin` will be clipped.
+              Defaults to 0.0.
+        vmax: The maximum value for the colormap range. Values above `vmax` will be clipped.
+              Defaults to 1.0.
+        cmap: The name of the Matplotlib colormap to use for the heatmap. Defaults to "magma".
+        show_ticks_labels: A boolean indicating whether to display the layer names as tick labels on the axes.
+                           Defaults to `True`.
+        short_tick_labels_splits: An optional integer. If provided and `show_ticks_labels` is `True`,
+                                  tick labels will be shortened by taking the last `short_tick_labels_splits`
+                                  parts of the layer name (split by '.'). For example, if a layer is
+                                  "model.encoder.layer.0.attention" and `short_tick_labels_splits` is 2,
+                                  the label will become "0-attention". If `None`, full layer names are used.
+        use_tight_layout: A boolean indicating whether to automatically adjust plot parameters for a tight layout.
+                          This helps prevent labels from overlapping or being cut off. Defaults to `True`.
+        show_annotations: A boolean indicating whether to display the CKA values as text annotations on the heatmap cells.
+                          Defaults to `True`.
+        show_img: A boolean indicating whether to display the plot immediately after generation.
+                  If `False`, the plot is generated but not shown (useful when only saving).
+                  Defaults to `True`.
+        show_half_heatmap: A boolean indicating whether to mask the upper triangle of the heatmap.
+                           This is useful when the CKA matrix is symmetric and you only need to show
+                           one half to avoid redundancy. Defaults to `False`.
+        invert_y_axis: A boolean indicating whether to invert the y-axis of the plot.
+                       Defaults to `True`.
+        title_font_size: The font size for the plot title. Defaults to 14.
+        axis_font_size: The font size for the x and y-axis labels. Defaults to 12.
+        tick_font_size: The font size for the tick labels (layer names). Defaults to 10.
+        figsize: A tuple `(width, height)` in inches, specifying the size of the figure.
+                 Defaults to (10, 10).
+        dpi: The dots per inch (resolution) for the saved figure. Higher values result in higher quality images.
+             Defaults to 300.
     """
     # Build the mask
     mask = (

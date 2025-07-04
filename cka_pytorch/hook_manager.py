@@ -1,91 +1,125 @@
-from typing import Callable, Optional, Tuple, Type, Union
+from __future__ import annotations
+
+from functools import partial
+from typing import Dict, List
 
 import torch
-from torch import nn
-from torchvision.models.resnet import BasicBlock, Bottleneck
-
-from cka_pytorch.utils import gram
-
-_HOOK_LAYER_TYPES = (
-    Bottleneck,
-    BasicBlock,
-    nn.Conv2d,
-    nn.AdaptiveAvgPool2d,
-    nn.MaxPool2d,
-    nn.modules.batchnorm._BatchNorm,
-)
+import torch.nn as nn
 
 
 class HookManager:
     """
-    A class to manage hooks in a PyTorch model for feature extraction.
+    A class to manage forward hooks in a PyTorch model for extracting intermediate features
+    (activations) from specified layers.
 
-    This class provides a convenient way to register, manage, and remove hooks
-    from a model. It is designed to capture intermediate layer outputs, which
-    can then be used for analysis, such as calculating CKA.
-
-    The manager can recursively traverse a model and attach forward hooks to
-    layers of specified types. It also provides built-in hook functions for
-    common feature transformations like flattening and average pooling.
+    This manager allows attaching hooks to specific modules within a `torch.nn.Module`
+    and collecting their outputs during the forward pass. It also provides utilities
+    to clear collected features and remove hooks.
     """
 
-    def __init__(
-        self,
-        model: nn.Module,
-        hook_fn: Optional[Union[str, Callable]] = None,
-        hook_layer_types: Tuple[Type[nn.Module], ...] = _HOOK_LAYER_TYPES,
-        calculate_gram: bool = True,
-    ) -> None:
+    def __init__(self, model: nn.Module, layers: List[str]) -> None:
         """
-        Initializes the HookManager and registers the hooks.
+        Initializes the HookManager and registers forward hooks on the specified layers.
 
         Args:
-            model: The PyTorch model to attach hooks to.
-            hook_fn: The hook function or a string identifier for a built-in function
-                     ('flatten' or 'avgpool'). If None, 'flatten' is used.
-            hook_layer_types: A tuple of nn.Module layer types to attach hooks to.
-            calculate_gram: If True, computes the Gram matrix of the features
-                            before storing them.
+            model: The PyTorch model (`torch.nn.Module`) to which hooks will be attached.
+            layers: A list of strings, where each string is the fully qualified name of a
+                    module (layer) within the `model` from which to extract features.
+                    These names typically come from `model.named_modules()`.
+
+        Raises:
+            ValueError: If no valid layers are found in the model based on the provided `layers` list.
         """
         self.model = model
-        self.hook_fn = hook_fn
-        self.hook_layer_types = hook_layer_types
-        self.calculate_gram = calculate_gram
+        self.features: Dict[str, torch.Tensor] = {}
+        self.handles: List[torch.utils.hooks.RemovableHandle] = []
 
-        for layer in self.hook_layer_types:
-            if not issubclass(layer, nn.Module):
-                raise TypeError(f"Class {layer} is not an nn.Module.")
+        # Use list(dict.fromkeys(layers)) to preserve order while removing duplicate layer names
+        self.module_names = self._insert_hooks(list(dict.fromkeys(layers)))
 
-        if self.hook_fn is None:
-            self.hook_fn = self.flatten_hook_fn
-        elif isinstance(self.hook_fn, str):
-            hook_fn_dict = {
-                "flatten": self.flatten_hook_fn,
-                "avgpool": self.avgpool_hook_fn,
-            }
-            if self.hook_fn in hook_fn_dict:
-                self.hook_fn = hook_fn_dict[self.hook_fn]
-            else:
-                raise ValueError(
-                    f"No hook function named {self.hook_fn}. Options: {list(hook_fn_dict.keys())}"
-                )
+    def _hook(
+        self,
+        module_name: str,
+        module: nn.Module,
+        inp: torch.Tensor,
+        out: torch.Tensor,
+    ) -> None:
+        """
+        The hook function that is registered to a module's forward pass.
 
-        self.features: list[torch.Tensor] = []
-        self.module_names: list[str] = []
-        self.handles: list[torch.utils.hooks.RemovableHandle] = []
+        This function is called every time the module executes its forward pass.
+        It captures the output of the module and stores it in the `self.features` dictionary,
+        keyed by the `module_name`.
 
-        self.register_hooks(self.hook_fn)
+        Args:
+            module_name: The name of the module (layer) to which this hook is attached.
+            module: The module itself (unused in this implementation).
+            inp: The input tensor(s) to the module (unused in this implementation).
+            out: The output tensor(s) from the module's forward pass. This is the activation
+                 that will be stored.
+        """
+
+    def _insert_hooks(self, layers: List[str]) -> List[str]:
+        """
+        Registers forward hooks on the specified layers of the model.
+
+        This method iterates through all named modules in the `self.model`.
+        If a module's name matches one of the names in the `layers` list,
+        a forward hook is registered to that module. The hook will call `_hook`
+        to save the module's output. It also keeps track of the `RemovableHandle`
+        for each registered hook, allowing them to be removed later.
+
+        Args:
+            layers: A list of strings, representing the names of the layers
+                    to which hooks should be attached.
+
+        Returns:
+            A list of strings containing the names of the layers for which hooks were successfully registered.
+            This list might be shorter than the input `layers` if some specified layers were not found.
+
+        Raises:
+            ValueError: If, after attempting to register hooks, no layers were found in the model.
+                        This typically indicates an issue with the provided layer names.
+        """
+        filtered_layers: List[str] = []
+        for module_name, module in self.model.named_modules():
+            if module_name in layers:
+                handle = module.register_forward_hook(partial(self._hook, module_name))  # type: ignore
+                self.handles.append(handle)
+                filtered_layers.append(module_name)
+
+        if len(filtered_layers) != len(layers):
+            hooked_set = set(filtered_layers)
+            not_hooked = [layer for layer in layers if layer not in hooked_set]
+            print(
+                f"Warning: Could not find layers: {not_hooked}. They will be ignored."
+            )
+
+        if not filtered_layers:
+            raise ValueError(
+                "No layers were found in the model. Please use `model.named_modules()` "
+                "to check the available layer names."
+            )
+
+        return filtered_layers
 
     def clear_features(self) -> None:
         """
-        Clears the collected features and module names.
+        Clears all currently collected features from the `self.features` dictionary.
+
+        This method should be called after processing each batch of data to ensure
+        that features from previous batches do not interfere with subsequent calculations.
         """
-        self.features = []
-        self.module_names = []
+        self.features = {}
 
     def clear_all(self) -> None:
         """
-        Clears all collected data and removes all registered hooks.
+        Clears all collected features and removes all registered hooks.
+
+        This method combines the functionality of `clear_features` and `clear_hooks`,
+        providing a convenient way to reset the HookManager's state entirely.
+        It is useful when you are done with feature extraction for a particular task
+        or model and want to free up resources.
         """
         self.clear_hooks()
         self.clear_features()
@@ -96,92 +130,4 @@ class HookManager:
         """
         for handle in self.handles:
             handle.remove()
-
         self.handles = []
-        for m in self.model.modules():
-            if hasattr(m, "module_name"):
-                delattr(m, "module_name")
-
-    def register_hooks(self, hook_fn: Callable) -> None:
-        """
-        Registers hooks to the model recursively.
-
-        Args:
-            hook_fn: The hook function to be registered. It must accept
-                     (module, input, output) as arguments.
-        """
-        self._register_hook_recursive(self.model, hook_fn, prev_name="")
-
-    def _register_hook_recursive(
-        self, module: nn.Module, hook_fn: Callable, prev_name: str = ""
-    ) -> None:
-        """
-        Recursively traverses the model and registers hooks to children modules.
-
-        Args:
-            module: The current module to traverse.
-            hook_fn: The hook function to register.
-            prev_name: The name of the parent module, used to build the full module name.
-        """
-        for name, child in module.named_children():
-            curr_name = f"{prev_name}.{name}" if prev_name else name
-            curr_name = curr_name.replace("_model.", "")
-            num_grandchildren = len(list(child.children()))
-
-            if num_grandchildren > 0:
-                self._register_hook_recursive(child, hook_fn, prev_name=curr_name)
-
-            if isinstance(child, self.hook_layer_types):
-                handle = child.register_forward_hook(hook_fn)
-                self.handles.append(handle)
-                setattr(child, "module_name", curr_name)
-
-    def flatten_hook_fn(
-        self, module: nn.Module, inp: torch.Tensor, out: torch.Tensor
-    ) -> None:
-        """
-        A hook function that flattens the output of a module.
-
-        The flattened feature is stored in `self.features`.
-
-        Args:
-            module: The module to which the hook is attached.
-            inp: The input to the module (unused).
-            out: The output from the module.
-        """
-        batch_size = out.size(0)
-        feature = out.reshape(batch_size, -1)
-
-        if self.calculate_gram:
-            feature = gram(feature)
-
-        module_name = getattr(module, "module_name")
-        self.features.append(feature)
-        self.module_names.append(module_name)
-
-    def avgpool_hook_fn(
-        self, module: nn.Module, inp: torch.Tensor, out: torch.Tensor
-    ) -> None:
-        """
-        A hook function that applies average pooling to the output of a module.
-
-        The pooled feature is stored in `self.features`.
-
-        Args:
-            module: The module to which the hook is attached.
-            inp: The input to the module (unused).
-            out: The output from the module.
-        """
-        if out.dim() == 4:
-            feature = out.mean(dim=(-1, -2))
-        elif out.dim() == 3:
-            feature = out.mean(dim=-1)
-        else:
-            feature = out
-
-        if self.calculate_gram:
-            feature = gram(feature)
-
-        module_name = getattr(module, "module_name")
-        self.features.append(feature)
-        self.module_names.append(module_name)
