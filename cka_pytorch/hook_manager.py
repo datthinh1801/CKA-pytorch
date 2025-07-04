@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, List
+from typing import Dict, List, Type
 
 import torch
 import torch.nn as nn
@@ -23,7 +23,7 @@ class HookManager:
     def __init__(
         self,
         model: nn.Module | _FabricModule,
-        layers: List[str] | None = None,
+        layers: List[str] | List[Type] | None = None,
         recursive: bool = True,
     ) -> None:
         """
@@ -46,41 +46,14 @@ class HookManager:
         self.handles: List[torch.utils.hooks.RemovableHandle] = []
 
         if layers is None:
-            layers = self._extract_all_layers(model, recursive)
+            # If no layers are specified, default to hooking all layers
+            layers = [nn.Module]
 
         self.module_names = self._insert_hooks(
             module=model,
             layers=layers,
             recursive=recursive,
         )
-
-    def _extract_all_layers(
-        self, module: nn.Module | _FabricModule, recursive: bool = True
-    ) -> List[str]:
-        """
-        Extracts all layer names from the model recursively.
-
-        This method traverses the model and collects the names of all modules
-        (layers) in a flat list. It is useful for debugging or when you want to
-        register hooks on all layers without specifying them explicitly.
-
-        Args:
-            module: The PyTorch model (`torch.nn.Module`) to extract layer names from.
-
-        Returns:
-            A list of strings, where each string is the name of a module in the model.
-        """
-        layers = set()
-        if isinstance(module, _FabricModule):
-            module = module.module
-
-        for name, child in module.named_children():
-            num_children = len(list(child.named_children()))
-            if recursive and num_children > 0:
-                layers.update(self._extract_all_layers(child))
-            else:
-                layers.add(name)
-        return list(layers)
 
     def _hook(
         self,
@@ -112,10 +85,52 @@ class HookManager:
         feature = gram(feature)
         self.features[module_name] = feature
 
+    def _should_hook_module(
+        self,
+        child: nn.Module,
+        module_name: str,
+        curr_name: str,
+        layers: List[str] | List[Type],
+        recursive: bool = True,
+    ) -> bool:
+        """
+        Determines whether a module should be hooked based on the layers criteria.
+
+        Args:
+            child: The module to check
+            module_name: The short name of the module
+            curr_name: The full qualified name of the module
+            layers: The list of layer names or types to match against
+            recursive: Whether to check recursively in submodules
+
+        Returns:
+            True if the module should be hooked, False otherwise
+        """
+        if not layers:
+            return False
+
+        # If the child is a container, we should not hook it directly,
+        # but rather check its children recursively.
+        # Since the output of the last children of the container is the output of the container,
+        # we do not need to hook the container itself.
+        if recursive and isinstance(child, (nn.Sequential, nn.ModuleList)):
+            return False
+
+        # Check if the module name matches any of the specified layers
+        if isinstance(layers[0], str):
+            return module_name in layers or curr_name in layers
+
+        # Check if the module is of a specified layer type
+        if isinstance(layers[0], Type):
+            type_layers = [layer for layer in layers if isinstance(layer, type)]
+            return bool(type_layers and isinstance(child, tuple(type_layers)))
+
+        return False
+
     def _insert_hooks(
         self,
-        module: nn.Module,
-        layers: List[str],
+        module: nn.Module | _FabricModule,
+        layers: List[str] | List[Type],
         recursive: bool = True,
         prev_name: str = "",
     ) -> List[str]:
@@ -140,6 +155,10 @@ class HookManager:
             ValueError: If, after attempting to register hooks, no layers were found in the model.
                         This typically indicates an issue with the provided layer names.
         """
+        if isinstance(module, _FabricModule):
+            # If the module is a FabricModule, use its underlying module for hook registration
+            module = module.module
+
         filtered_layers: List[str] = []
         for module_name, child in module.named_children():
             curr_name = f"{prev_name}.{module_name}" if prev_name else module_name
@@ -147,7 +166,6 @@ class HookManager:
             num_grandchildren = len(list(child.named_children()))
 
             if recursive and num_grandchildren > 0:
-                # If the module has children, recursively register hooks for them
                 filtered_layers.extend(
                     self._insert_hooks(
                         module=child,
@@ -157,7 +175,10 @@ class HookManager:
                     )
                 )
 
-            if module_name in layers:
+            # Check if this module should be hooked
+            if self._should_hook_module(
+                child, module_name, curr_name, layers, recursive
+            ):
                 handle = child.register_forward_hook(partial(self._hook, curr_name))  # type: ignore
                 self.handles.append(handle)
                 filtered_layers.append(curr_name)

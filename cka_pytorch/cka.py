@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List, Optional, Type
 
 import torch
 import torch.nn as nn
@@ -28,8 +28,8 @@ class CKACalculator:
         self,
         model1: nn.Module,
         model2: nn.Module,
-        model1_layers: List[str] | None = None,
-        model2_layers: List[str] | None = None,
+        model1_layers: List[str] | List[Type] | None = None,
+        model2_layers: List[str] | List[Type] | None = None,
         model1_name: str = "Model 1",
         model2_name: str = "Model 2",
         batched_feature_size: int = 64,
