@@ -5,6 +5,7 @@ from typing import Dict, List
 
 import torch
 import torch.nn as nn
+from lightning.fabric.wrappers import _FabricModule
 
 from .utils import gram
 
@@ -21,7 +22,7 @@ class HookManager:
 
     def __init__(
         self,
-        model: nn.Module,
+        model: nn.Module | _FabricModule,
         layers: List[str] | None = None,
         recursive: bool = True,
     ) -> None:
@@ -54,7 +55,7 @@ class HookManager:
         )
 
     def _extract_all_layers(
-        self, module: nn.Module, recursive: bool = True
+        self, module: nn.Module | _FabricModule, recursive: bool = True
     ) -> List[str]:
         """
         Extracts all layer names from the model recursively.
@@ -70,8 +71,12 @@ class HookManager:
             A list of strings, where each string is the name of a module in the model.
         """
         layers = set()
+        if isinstance(module, _FabricModule):
+            module = module.module
+
         for name, child in module.named_children():
-            if recursive and len(list(child.named_children())) > 0:
+            num_children = len(list(child.named_children()))
+            if recursive and num_children > 0:
                 layers.update(self._extract_all_layers(child))
             else:
                 layers.add(name)
