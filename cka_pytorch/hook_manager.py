@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Dict, List, Type
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -23,20 +23,19 @@ class HookManager:
     def __init__(
         self,
         model: nn.Module | _FabricModule,
-        layers: List[str] | List[Type] | None = None,
+        layers: list[str] | list[type] | None = None,
         recursive: bool = True,
     ) -> None:
         """
         Initializes the HookManager and registers forward hooks on the specified layers.
 
         Args:
-            model: The PyTorch model (`torch.nn.Module`) to which hooks will be attached.
-            layers: A list of strings, where each string is the fully qualified name of a
-                    module (layer) within the `model` from which to extract features.
-                    These names typically come from `model.named_modules()`.
-                    If `None`, all layers will be hooked. Defaults to `None`.
-            recursive: A boolean indicating whether to register hooks recursively on the model.
-                      If `True`, hooks will be registered on all submodules of the specified layers.
+            model (torch.nn.Module | _FabricModule): The module to which hooks will be attached.
+            layers (list[str] | list[type] | None): A list of strings (fully qualified module names)
+                or a list of types (layer classes) within the model from which to extract features.
+                If None, all layers will be hooked. Defaults to None.
+            recursive (bool): Whether to register hooks recursively on the model.
+                If True, hooks will be registered on all submodules of the specified layers.
 
         Raises:
             ValueError: If no valid layers are found in the model based on the provided `layers` list.
@@ -70,11 +69,10 @@ class HookManager:
         keyed by the `module_name`.
 
         Args:
-            module_name: The name of the module (layer) to which this hook is attached.
-            module: The module itself (unused in this implementation).
-            inp: The input tensor(s) to the module (unused in this implementation).
-            out: The output tensor(s) from the module's forward pass. This is the activation
-                 that will be stored.
+            module_name (str): The name of the module (layer) to which this hook is attached.
+            module (torch.nn.Module): The module itself (unused in this implementation).
+            inp (torch.Tensor): The input tensor(s) to the module (unused in this implementation).
+            out (torch.Tensor): The output tensor(s) from the module's forward pass. This is the activation that will be stored.
         """
         del (
             module,
@@ -90,21 +88,21 @@ class HookManager:
         child: nn.Module,
         module_name: str,
         curr_name: str,
-        layers: List[str] | List[Type],
+        layers: list[str] | list[type],
         recursive: bool = True,
     ) -> bool:
         """
         Determines whether a module should be hooked based on the layers criteria.
 
         Args:
-            child: The module to check
-            module_name: The short name of the module
-            curr_name: The full qualified name of the module
-            layers: The list of layer names or types to match against
-            recursive: Whether to check recursively in submodules
+            child (torch.nn.Module): The module to check.
+            module_name (str): The short name of the module.
+            curr_name (str): The fully qualified name of the module.
+            layers (list[str] | list[type]): The list of layer names (str) or types (type) to match against.
+            recursive (bool): For handling Sequential/ModuleList containers. If True, Sequential/ModuleList containers are not hooked directly.
 
         Returns:
-            True if the module should be hooked, False otherwise
+            bool: True if the module should be hooked, False otherwise.
         """
         if not layers:
             return False
@@ -121,39 +119,38 @@ class HookManager:
             return module_name in layers or curr_name in layers
 
         # Check if the module is of a specified layer type
-        if isinstance(layers[0], Type):
-            type_layers = [layer for layer in layers if isinstance(layer, type)]
-            return bool(type_layers and isinstance(child, tuple(type_layers)))
+        if isinstance(layers[0], type):
+            return isinstance(child, tuple(layers))  # type: ignore
 
         return False
 
     def _insert_hooks(
         self,
         module: nn.Module | _FabricModule,
-        layers: List[str] | List[Type],
+        layers: list[str] | list[type],
         recursive: bool = True,
         prev_name: str = "",
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Registers forward hooks on the specified layers of the model.
 
-        This method iterates through all named modules in the `self.model`.
-        If a module's name matches one of the names in the `layers` list,
-        a forward hook is registered to that module. The hook will call `_hook`
-        to save the module's output. It also keeps track of the `RemovableHandle`
-        for each registered hook, allowing them to be removed later.
+        This method iterates through all named modules in the model.
+        If a module's name or type matches one of the entries in the `layers` list,
+        a forward hook is registered to that module.
+        The behavior for Sequential and ModuleList containers depends on the `recursive` flag:
+            - If `recursive=True`, Sequential/ModuleList containers are not hooked,
+                but their children are processed recursively.
+            - If `recursive=False`, Sequential/ModuleList containers can be hooked if they match,
+                but their children are not processed.
 
         Args:
-            layers: A list of strings, representing the names of the layers
-                    to which hooks should be attached.
+            module (torch.nn.Module | _FabricModule): The model or submodule to process.
+            layers (list[str] | list[type]): List of layer names (str) or types (type) to hook.
+            recursive (bool): Whether to recursively process submodules.
+            prev_name (str): The qualified name prefix for the current module (used for nested modules).
 
         Returns:
-            A list of strings containing the names of the layers for which hooks were successfully registered.
-            This list might be shorter than the input `layers` if some specified layers were not found.
-
-        Raises:
-            ValueError: If, after attempting to register hooks, no layers were found in the model.
-                        This typically indicates an issue with the provided layer names.
+            list[str]: Names of the layers for which hooks were successfully registered.
         """
         if isinstance(module, _FabricModule):
             # If the module is a FabricModule, use its underlying module for hook registration

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional, Type
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -28,12 +28,12 @@ class CKACalculator:
         self,
         model1: nn.Module,
         model2: nn.Module,
-        model1_layers: List[str] | List[Type] | None = None,
-        model2_layers: List[str] | List[Type] | None = None,
+        model1_layers: list[str] | list[type] | None = None,
+        model2_layers: list[str] | list[type] | None = None,
         model1_name: str = "Model 1",
         model2_name: str = "Model 2",
         batched_feature_size: int = 64,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         hook_recursive: bool = True,
         verbose: bool = True,
     ) -> None:
@@ -41,27 +41,18 @@ class CKACalculator:
         Initializes the CKACalculator with two models and their respective layers for CKA computation.
 
         Args:
-            model1: The first PyTorch model. Its activations from specified layers will be used.
-            model2: The second PyTorch model. Its activations from specified layers will be used.
-            model1_layers: A list of strings, where each string is the name of a layer in `model1`
-                           whose activations are to be extracted. These names should correspond to
-                           names returned by `model1.named_modules()`.
-            model2_layers: An optional list of strings, similar to `model1_layers` but for `model2`.
-                           If `None`, `model1_layers` will be used for `model2` as well.
-            model1_name: An optional string representing the name of `model1`, used for plotting.
-                         Defaults to "Model 1".
-            model2_name: An optional string representing the name of `model2`, used for plotting.
-                         Defaults to "Model 2".
-            batched_feature_size: An integer specifying the number of layers to process in a single batch
-                                 when calculating HSIC. This is useful for memory efficiency, especially
-                                 when dealing with large models or many layers. Defaults to 64.
-            device: An optional `torch.device` to perform computations on (e.g., `torch.device("cuda")`
-                    or `torch.device("cpu")`). If `None`, the device of `model1`'s parameters will be used.
-            hook_recursive: A boolean indicating whether to register hooks recursively on the model.
-                           If `True`, hooks will be registered on all submodules of the specified layers.
-                           Defaults to `True`.
-            verbose: A boolean indicating whether to print progress bars during CKA calculation.
-                     Defaults to `True`.
+            model1 (torch.nn.Module): The first PyTorch model. Its activations from specified layers will be used.
+            model2 (torch.nn.Module): The second PyTorch model. Its activations from specified layers will be used.
+            model1_layers (list[str] | list[type] | None): A list of strings (layer names) or types (layer classes)
+                in `model1` whose activations are to be extracted. If None, all layers are used.
+            model2_layers (list[str] | list[type] | None): A list of strings (layer names) or types (layer classes)
+                in `model2` whose activations are to be extracted. If None, `model1_layers` will be used for `model2` as well.
+            model1_name (str): Name of `model1` for plotting. Defaults to "Model 1".
+            model2_name (str): Name of `model2` for plotting. Defaults to "Model 2".
+            batched_feature_size (int): Number of layers to process in a single batch when calculating HSIC. Defaults to 64.
+            device (torch.device | None): The device to perform computations on. If None, uses the device of `model1`'s parameters.
+            hook_recursive (bool): Whether to register hooks recursively on the model. If True, hooks will be registered on all submodules of the specified layers. Defaults to True.
+            verbose (bool): Whether to print progress bars during CKA calculation. Defaults to True.
         """
         self.model1 = model1
         self.model2 = model2
@@ -114,21 +105,12 @@ class CKACalculator:
         is then derived from these accumulated HSIC values.
 
         Args:
-            dataloader: A `torch.utils.data.DataLoader` providing the input data.
-                        It's recommended that the DataLoader does not drop the last batch
-                        (`drop_last=False`) to ensure all samples contribute to the CKA calculation.
-            num_epochs: The number of times to iterate over the entire `dataloader`.
-                        Increasing this can lead to more stable CKA estimates, especially with noisy data.
-                        Defaults to 10.
-            epsilon: A small float value added to the denominator during the final CKA calculation
-                     to prevent division by zero in cases where self-HSIC values might be very small.
-                     Defaults to 1e-4.
+            dataloader (torch.utils.data.DataLoader): DataLoader providing the input data. It's recommended that the DataLoader does not drop the last batch (`drop_last=False`).
+            num_epochs (int): The number of times to iterate over the entire `dataloader`. Defaults to 10.
+            epsilon (float): A small float value added to the denominator during the final CKA calculation to prevent division by zero. Defaults to 1e-4.
 
         Returns:
-            A `torch.Tensor` representing the CKA matrix. The dimensions of the matrix will be
-            (number of `model1_layers`, number of `model2_layers`). Each element `(i, j)`
-            in the matrix represents the CKA similarity between the i-th layer of `model1`
-            and the j-th layer of `model2`.
+            torch.Tensor: The CKA matrix. The dimensions will be (number of `model1_layers`, number of `model2_layers`). Each element (i, j) in the matrix represents the CKA similarity between the i-th layer of `model1` and the j-th layer of `model2`.
         """
         for epoch in range(num_epochs):
             loader = tqdm(
@@ -151,8 +133,7 @@ class CKACalculator:
         Finally, it clears the collected features to prepare for the next batch.
 
         Args:
-            x: A `torch.Tensor` representing a batch of input data. This tensor is moved
-               to the appropriate device (CPU/GPU) before processing.
+            x (torch.Tensor): A batch of input data. This tensor is moved to the appropriate device (CPU/GPU) before processing.
         """
         _ = self.model1(x)
         _ = self.model2(x)
@@ -173,8 +154,8 @@ class CKACalculator:
 
     def _update_hsic_matrices(
         self,
-        features1: List[torch.Tensor],
-        features2: List[torch.Tensor],
+        features1: list[torch.Tensor],
+        features2: list[torch.Tensor],
     ) -> None:
         """
         Calculates and updates the self-HSIC and cross-HSIC matrices in a mini-batched manner.
@@ -186,10 +167,8 @@ class CKACalculator:
         and `self.self_hsic_y` using the `AccumTensor` metric.
 
         Args:
-            features1: A list of `torch.Tensor`s, where each tensor represents the activations
-                       from a layer of `model1` for the current batch.
-            features2: A list of `torch.Tensor`s, where each tensor represents the activations
-                       from a layer of `model2` for the current batch.
+            features1 (list[torch.Tensor]): Each tensor represents the activations from a layer of `model1` for the current batch.
+            features2 (list[torch.Tensor]): Each tensor represents the activations from a layer of `model2` for the current batch.
         """
         hsic_x = torch.zeros(1, self.num_layers_x, device=self.device)
         hsic_y = torch.zeros(self.num_layers_y, 1, device=self.device)
@@ -230,15 +209,15 @@ class CKACalculator:
         It retrieves the final accumulated cross-HSIC matrix (`hsic_matrix`)
         and the accumulated self-HSIC vectors for `model1` (`self_hsic_x`)
         and `model2` (`self_hsic_y`).
-        The CKA value for each layer pair `(i, j)` is then calculated as:
+        The CKA value for each layer pair (i, j) is then calculated as:
         CKA(i, j) = HSIC(X_i, Y_j) / sqrt(HSIC(X_i, X_i) * HSIC(Y_j, Y_j))
         where X_i and Y_j are the activations of layer i from model1 and layer j from model2, respectively.
 
         Args:
-            epsilon: A small float value added to the denominator to prevent division by zero.
+            epsilon (float): A small float value added to the denominator to prevent division by zero.
 
         Returns:
-            A `torch.Tensor` representing the final CKA matrix.
+            torch.Tensor: The final CKA matrix.
         """
         hsic_matrix = self.hsic_matrix.compute()
         self_hsic_x = self.self_hsic_x.compute()
@@ -270,7 +249,8 @@ class CKACalculator:
         figsize: tuple[int, int] = (10, 10),
         dpi: int = 300,
     ) -> None:
-        """Plot the CKA matrix.
+        """
+        Plot the CKA matrix.
 
         Args:
             save_path (str | None): Where to save the plot. If None, the plot will not be saved.
@@ -285,6 +265,11 @@ class CKACalculator:
             show_img (bool): Whether to show the plot.
             show_half_heatmap (bool): Whether to show only half of the heatmap.
             invert_y_axis (bool): Whether to invert the y-axis.
+            title_font_size (int): Font size for the plot title.
+            axis_font_size (int): Font size for the axis labels.
+            tick_font_size (int): Font size for the tick labels.
+            figsize (tuple[int, int]): Figure size.
+            dpi (int): Dots per inch for the figure.
         """
         plot_cka(
             cka_matrix=cka_matrix,
@@ -315,8 +300,7 @@ class CKACalculator:
         """
         Resets the accumulators for a new CKA calculation.
 
-        This method clears the accumulated HSIC values and resets the hook managers
-        to prepare for a new CKA calculation.
+        This method clears the accumulated HSIC values and resets the hook managers to prepare for a new CKA calculation.
         """
         self.hsic_matrix.reset()
         self.self_hsic_x.reset()
