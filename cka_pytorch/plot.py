@@ -10,7 +10,8 @@ def plot_cka(
     model2_layers: list[str],
     model1_name: str = "Model 1",
     model2_name: str = "Model 2",
-    save_path: str | None = None,
+    dirpath: str | None = None,
+    filepath: str | None = None,
     title: str | None = None,
     vmin: float = 0.0,
     vmax: float = 1.0,
@@ -47,9 +48,12 @@ def plot_cka(
                      Defaults to "Model 1".
         model2_name: An optional string representing the name of the second model. Used in the plot title and x-axis label.
                      Defaults to "Model 2".
-        save_path: An optional string specifying the directory path where the plot should be saved.
+        dirpath: An optional string specifying the directory path where the plot should be saved.
                    If `None`, the plot will be displayed but not saved. The filename will be generated
                    based on the title.
+        filepath: An optional string specifying the full file path where the plot should be saved.
+                  If provided, this will override `dirpath`. The filename will be generated based on the
+                  title. If `None`, the plot will not be saved.
         title: An optional string to be used as the main title of the plot. If `None`,
                a default title like "Model 1 vs Model 2" will be generated.
         vmin: The minimum value for the colormap range. Values below `vmin` will be clipped.
@@ -155,9 +159,11 @@ def plot_cka(
         plt.tight_layout()
 
     # Save the plot to the specified path if defined
-    if save_path is not None:
+    if filepath is not None:
+        plt.savefig(filepath, dpi=dpi, bbox_inches="tight")
+    elif dirpath is not None:
         title = title.replace("/", "-")
-        path_rel = f"{save_path}/{title}.png"
+        path_rel = f"{dirpath}/{title}.png"
         plt.savefig(path_rel, dpi=dpi, bbox_inches="tight")
 
     # Show the image if the user chooses to do so

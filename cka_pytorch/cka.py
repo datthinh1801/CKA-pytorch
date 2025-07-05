@@ -231,7 +231,8 @@ class CKACalculator:
     def plot_cka_matrix(
         self,
         cka_matrix: torch.Tensor,
-        save_path: str | None = None,
+        dirpath: str | None = None,
+        filepath: str | None = None,
         title: str | None = None,
         vmin: float = 0.0,
         vmax: float = 1.0,
@@ -253,7 +254,8 @@ class CKACalculator:
         Plot the CKA matrix.
 
         Args:
-            save_path (str | None): Where to save the plot. If None, the plot will not be saved.
+            dirpath (str | None): Where to save the plot. If None, the plot will not be saved.
+            filepath (str | None): Where to save the plot. If provided, this will override `dirpath`.
             title (str | None): The plot title. If None, a default title will be used.
             vmin (float): Minimum value for the colormap.
             vmax (float): Maximum value for the colormap.
@@ -277,7 +279,8 @@ class CKACalculator:
             model2_layers=self.hook_manager2.module_names,
             model1_name=self.model1_name,
             model2_name=self.model2_name,
-            save_path=save_path,
+            dirpath=dirpath,
+            filepath=filepath,
             title=title,
             vmin=vmin,
             vmax=vmax,
