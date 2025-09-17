@@ -26,7 +26,7 @@ def plot_cka(
     title_font_size: int = 14,
     axis_font_size: int = 12,
     tick_font_size: int = 10,
-    figsize: tuple[int, int] = (10, 10),
+    figsize: tuple[int, int] | None = None,
     dpi: int = 300,
 ) -> None:
     """
@@ -83,11 +83,21 @@ def plot_cka(
         title_font_size: The font size for the plot title. Defaults to 14.
         axis_font_size: The font size for the x and y-axis labels. Defaults to 12.
         tick_font_size: The font size for the tick labels (layer names). Defaults to 10.
-        figsize: A tuple `(width, height)` in inches, specifying the size of the figure.
-                 Defaults to (10, 10).
+        figsize: An optional tuple `(width, height)` in inches, specifying the size of the figure.
+                 If `None`, the size is automatically calculated based on the number of layers.
+                 Defaults to `None`.
         dpi: The dots per inch (resolution) for the saved figure. Higher values result in higher quality images.
              Defaults to 300.
     """
+    # Set the figsize automatically if not provided
+    if figsize is None:
+        MIN_FIG_SIZE = 5.0
+        SCALE_FACTOR = 0.5
+        figsize = (
+            max(MIN_FIG_SIZE, cka_matrix.shape[1] * SCALE_FACTOR),
+            max(MIN_FIG_SIZE, cka_matrix.shape[0] * SCALE_FACTOR),
+        )
+
     # Build the mask
     mask = (
         torch.tril(torch.ones_like(cka_matrix, dtype=torch.bool), diagonal=-1)
