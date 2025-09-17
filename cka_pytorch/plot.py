@@ -91,9 +91,11 @@ def plot_cka(
     """
     # Set the figsize automatically if not provided
     if figsize is None:
+        MIN_FIG_SIZE = 5.0
+        SCALE_FACTOR = 0.5
         figsize = (
-            max(5, cka_matrix.shape[1] * 0.5),
-            max(5, cka_matrix.shape[0] * 0.5),
+            max(MIN_FIG_SIZE, cka_matrix.shape[1] * SCALE_FACTOR),
+            max(MIN_FIG_SIZE, cka_matrix.shape[0] * SCALE_FACTOR),
         )
 
     # Build the mask
