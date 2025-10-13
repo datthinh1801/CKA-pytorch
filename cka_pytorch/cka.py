@@ -220,13 +220,12 @@ class CKACalculator:
             torch.Tensor: The final CKA matrix.
         """
         hsic_matrix = self.hsic_matrix.compute()
-        self_hsic_x = self.self_hsic_x.compute()
-        self_hsic_y = self.self_hsic_y.compute()
+        self_hsic_x = self.self_hsic_x.compute().flatten()
+        self_hsic_y = self.self_hsic_y.compute().flatten()
 
-        cka_matrix = hsic_matrix.reshape(
-            self.num_layers_y, self.num_layers_x
-        ) / torch.sqrt(self_hsic_x * self_hsic_y + epsilon)
-        return cka_matrix
+        cka_matrix = hsic_matrix.reshape(self.num_layers_y, self.num_layers_x).T
+        denom = torch.sqrt(torch.outer(self_hsic_x, self_hsic_y) + epsilon)
+        return cka_matrix / denom
 
     def plot_cka_matrix(
         self,
